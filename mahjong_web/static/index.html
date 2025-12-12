@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mahjong Calc (Local)</title>
+  <style>
+    :root{
+      /* 背景・ベース */
+      --bg:#f4f6fb;
+      --card:#ffffff;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+
+      /* メインカラー */
+      --accent:#5b7cfa;
+      --accent-soft:#e9efff;
+
+      /* テキスト */
+      --text:#1f2937;
+    }
+
+    body{
+      margin:16px;
+      font-family:system-ui,-apple-system,Segoe UI,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    h1{ margin:0 0 12px 0; font-size:20px; }
+
+    .row{ display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:14px;
+      min-width:320px;
+    }
+
+    .card.wide{ flex:1; min-width:360px; }
+
+    .section{
+      margin:10px 0 0;
+      padding-top:10px;
+      border-top:1px solid var(--line);
+    }
+
+    .label{ font-weight:700; margin-bottom:6px; }
+
+    .small{ color:var(--muted); font-size:12px; }
+
+    /* Segmented control */
+    .seg{
+      display:flex;
+      border:1px solid var(--line);
+      border-radius:12px;
+      overflow:hidden;
+      background:#f9fafb;
+    }
+
+    .seg button{
+      flex:1;
+      padding:10px 0;
+      background:#f9fafb;
+      color:var(--text);
+      border:none;
+      cursor:pointer;
+    }
+
+    .seg button.active{
+      background:var(--accent);
+      color:#ffffff;
+    }
+
+    .grid2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+
+    /* Counter */
+    .counter{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .counter button{
+      width:44px;
+      height:40px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      background:#f9fafb;
+      color:var(--text);
+      cursor:pointer;
+    }
+
+    .counter .val{
+      min-width:56px;
+      text-align:center;
+      font-weight:800;
+      font-size:18px;
+    }
+
+    .counter .reset{ width:44px; }
+
+    /* Slots */
+    .slots{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    .slot{
+      width:46px;
+      height:64px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      background:#f9fafb;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      position:relative;
+    }
+
+    .slot.selected{
+      outline:2px solid var(--accent);
+      background:var(--accent-soft);
+    }
+
+    .slot.empty{
+      background:#eef2f7;
+    }
+
+    .slot .x{
+      position:absolute;
+      top:2px;
+      right:6px;
+      color:#9ca3af;
+      font-size:14px;
+      display:none;
+      cursor:pointer;
+    }
+
+    .slot.filled:hover .x{ display:block; }
+
+    /* Tile palette */
+    .tiles{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+
+    button.tile{
+      border:none;
+      background:transparent;
+      padding:0;
+      cursor:pointer;
+    }
+
+    /* Toolbar / pills */
+    .toolbar{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .pill{
+      padding:9px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#f9fafb;
+      cursor:pointer;
+    }
+
+    .pill.active{
+      background:var(--accent);
+      color:#ffffff;
+      border-color:transparent;
+    }
+
+    .pill.ghost{
+      background:transparent;
+      border:1px dashed var(--line);
+    }
+
+    /* Melds */
+    .melds{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .meld{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px;
+      background:#f9fafb;
+    }
+
+    .meld .left{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    .tag{
+      font-size:12px;
+      color:var(--muted);
+      padding:3px 8px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:#ffffff;
+    }
+
+    /* Buttons */
+    .btn{
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--accent);
+      background:var(--accent);
+      color:#ffffff;
+      cursor:pointer;
+    }
+
+    .btn2{
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#f9fafb;
+      color:var(--text);
+      cursor:pointer;
+    }
+
+    /* Output areas */
+    pre{
+      margin:0;
+      white-space:pre-wrap;
+      background:#f9fafb;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px;
+      color:#111827;
+    }
+
+    .rowline{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .spacer{ height:6px; }
+  </style>
+</head>
+
+<body>
+  <h1>Mahjong Calc (Local Web)</h1>
+
+  <div class="row">
+    <div class="card">
+      <div class="grid2">
+        <div>
+          <div class="label">場風</div>
+          <div class="seg" id="roundWind"></div>
+        </div>
+        <div>
+          <div class="label">自風</div>
+          <div class="seg" id="seatWind"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="grid2">
+          <div>
+            <div class="label">供託</div>
+            <div class="counter" id="kyotaku"></div>
+          </div>
+          <div>
+            <div class="label">積棒</div>
+            <div class="counter" id="honba"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="label">ドラ表示牌</div>
+        <div class="slots" id="doraSlots"></div>
+        <div class="spacer"></div>
+        <div class="label">カンドラ表示牌</div>
+        <div class="slots" id="kanDoraSlots"></div>
+
+        <div class="spacer"></div>
+        <div class="label">裏ドラ表示牌（立直時のみ）</div>
+        <div class="slots" id="uraSlots"></div>
+        <div class="spacer"></div>
+        <div class="label">カン裏ドラ表示牌（立直時のみ）</div>
+        <div class="slots" id="kanUraSlots"></div>
+
+        <p class="small">※すべて「表示牌」を入力します（例：四萬 → ドラ五萬）。</p>
+      </div>
+
+      <div class="section">
+        <div class="label">手牌（13枚）</div>
+        <div class="slots" id="handSlots"></div>
+        <div class="spacer"></div>
+        <div class="label">和了牌（1枚）</div>
+        <div class="slots" id="winSlot"></div>
+      </div>
+
+      <div class="section">
+        <div class="label">副露</div>
+        <div class="toolbar">
+          <button class="pill" id="modeChi">チー</button>
+          <button class="pill" id="modePon">ポン</button>
+          <button class="pill" id="modeMinkan">明槓</button>
+          <button class="pill" id="modeAnkan">暗槓</button>
+          <button class="pill ghost" id="modeNormal">通常入力</button>
+          <button class="pill" id="toggleAka">赤牌切替：OFF</button>
+        </div>
+        <p class="small" id="meldHint"></p>
+        <div class="melds" id="melds"></div>
+      </div>
+
+      <div class="section">
+        <div class="grid2">
+          <div>
+            <div class="label">立直</div>
+            <div class="seg" id="riichiSeg"></div>
+          </div>
+          <div>
+            <div class="label">一発</div>
+            <div class="seg" id="ippatsuSeg"></div>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="grid2">
+          <div>
+            <div class="label">嶺上開花</div>
+            <div class="seg" id="rinshanSeg"></div>
+          </div>
+          <div>
+            <div class="label">搶槓</div>
+            <div class="seg" id="chankanSeg"></div>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="grid2">
+          <div>
+            <div class="label">海底/河底</div>
+            <div class="seg" id="haiteiSeg"></div>
+          </div>
+          <div>
+            <div class="label">天和/地和</div>
+            <div class="seg" id="tenhouSeg"></div>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="grid2">
+          <div>
+            <div class="label">ツモ/ロン</div>
+            <div class="seg" id="winTypeSeg"></div>
+          </div>
+          <div>
+            <div class="label">親/子</div>
+            <div class="seg" id="dealerSeg"></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="rowline">
+            <button class="btn" id="calc">計算</button>
+            <button class="btn2" id="fillSample">サンプル入力</button>
+            <button class="btn2" id="clearAll">全クリア</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card wide">
+      <div class="label">牌パレット</div>
+      <div class="tiles" id="palette"></div>
+      <div class="section">
+        <div class="label">送信JSON（確認用）</div>
+        <pre id="jsonOut">-</pre>
+      </div>
+      <div class="section">
+        <div class="label">結果</div>
+        <pre id="result">未計算</pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

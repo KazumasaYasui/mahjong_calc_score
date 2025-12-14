@@ -1,108 +1,98 @@
-use crate::tile::Tile;
-use crate::tile::{Honor, Suit, TileKey};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy)]
+use crate::tile::{Suit, Tile, TileKey};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpecialHand {
-    Chiitoitsu, // 七対子
-    Kokushi,    // 国士無双
-    Kokushi13,  // 国士無双十三面待ち（ダブル役満扱い）
+    Chiitoitsu,
+    Kokushi,
+    Kokushi13, // 国士無双十三面待ち（ダブル役満扱い）
 }
 
+/// tiles14 は「手牌13 + 和了牌1」を想定
+/// has_calls = 副露があるかどうか（副露があると七対子・国士は不可として None）
 pub fn detect_special(tiles14: &[Tile], win_tile: Tile, has_calls: bool) -> Option<SpecialHand> {
     if has_calls {
-        return None; // 七対子/国士は副露不可
+        return None;
+    }
+    if tiles14.len() != 14 {
+        return None;
     }
 
-    let counts = count_tiles(tiles14);
-
-    if is_chiitoitsu(&counts) {
+    if is_chiitoitsu(tiles14) {
         return Some(SpecialHand::Chiitoitsu);
     }
 
-    if is_kokushi(&counts) {
-        // 13面待ち：対子になっている牌が和了牌である（＝13種が揃っていて、最後の1枚がどれでもOKだった形）
-        let wk = TileKey::from_tile(&win_tile);
-        if counts.get(&wk).copied().unwrap_or(0) == 2 {
-            return Some(SpecialHand::Kokushi13);
-        }
-        return Some(SpecialHand::Kokushi);
+    if let Some(sp) = detect_kokushi(tiles14, win_tile) {
+        return Some(sp);
     }
 
     None
 }
 
-fn count_tiles(tiles: &[Tile]) -> HashMap<TileKey, u8> {
-    let mut map = HashMap::new();
-    for t in tiles {
-        *map.entry(TileKey::from_tile(t)).or_insert(0) += 1;
+fn is_chiitoitsu(tiles14: &[Tile]) -> bool {
+    let mut counts: HashMap<TileKey, u8> = HashMap::new();
+    for t in tiles14 {
+        *counts.entry(TileKey::from_tile(t)).or_insert(0) += 1;
     }
-    map
-}
 
-fn is_chiitoitsu(counts: &HashMap<TileKey, u8>) -> bool {
+    // 7種類がすべて2枚ずつ
     if counts.len() != 7 {
         return false;
     }
     counts.values().all(|&c| c == 2)
 }
 
-fn is_kokushi(counts: &HashMap<TileKey, u8>) -> bool {
-    let orphans = kokushi_orphans();
-    let mut pair_found = false;
+fn detect_kokushi(tiles14: &[Tile], win_tile: Tile) -> Option<SpecialHand> {
+    // 国士の対象：么九（1/9） + 字牌 = 13種
+    // tiles14 がその13種すべてを含み、どれか1種が2枚なら国士
+    let mut counts: HashMap<TileKey, u8> = HashMap::new();
+    for t in tiles14 {
+        let k = TileKey::from_tile(t);
+        if !is_terminal_or_honor(t) {
+            return None;
+        }
+        *counts.entry(k).or_insert(0) += 1;
+    }
 
-    for o in &orphans {
-        match counts.get(o).copied().unwrap_or(0) {
+    // 13種揃っている必要がある
+    if counts.len() != 13 {
+        return None;
+    }
+
+    // 2枚の種類がちょうど1つ、他は1枚
+    let mut pair_key: Option<TileKey> = None;
+    for (k, &c) in &counts {
+        match c {
             1 => {}
             2 => {
-                if pair_found {
-                    return false;
+                if pair_key.is_some() {
+                    return None;
                 }
-                pair_found = true;
+                pair_key = Some(*k);
             }
-            _ => return false,
+            _ => return None,
         }
     }
 
-    // 余計な牌がない（13種のみ）
-    if counts.len() != 13 {
-        return false;
-    }
+    let Some(pk) = pair_key else {
+        return None;
+    };
 
-    pair_found
+    let wk = TileKey::from_tile(&win_tile);
+
+    // 十三面待ち：和了牌が「対子になった牌」であること
+    // （= 和了前は13種1枚ずつで、どれを引いても国士になる形）
+    if pk == wk {
+        Some(SpecialHand::Kokushi13)
+    } else {
+        Some(SpecialHand::Kokushi)
+    }
 }
 
-fn kokushi_orphans() -> Vec<TileKey> {
-    let mut v = vec![];
-
-    for &s in &[Suit::Man, Suit::Pin, Suit::Sou] {
-        v.push(TileKey {
-            suit: s,
-            num: 1,
-            honor: None,
-        });
-        v.push(TileKey {
-            suit: s,
-            num: 9,
-            honor: None,
-        });
+fn is_terminal_or_honor(t: &Tile) -> bool {
+    if t.suit == Suit::Honor {
+        return true;
     }
-
-    for &h in &[
-        Honor::East,
-        Honor::South,
-        Honor::West,
-        Honor::North,
-        Honor::White,
-        Honor::Green,
-        Honor::Red,
-    ] {
-        v.push(TileKey {
-            suit: Suit::Honor,
-            num: 0,
-            honor: Some(h),
-        });
-    }
-
-    v
+    t.num == 1 || t.num == 9
 }

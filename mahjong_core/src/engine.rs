@@ -3,9 +3,10 @@ use crate::dora::{count_aka, count_dora_from_indicators};
 use crate::fu::calc_fu;
 use crate::points::calc_points;
 use crate::special::{detect_special, SpecialHand};
-use crate::tile::{Honor, Suit, Tile};
+use crate::tile::{Honor, Suit, Tile, TileKey};
 use crate::yaku::{eval_special_yaku, eval_yaku_standard};
 use crate::{MeldType, Riichi, ScoreRequest, ScoreResult, WinType};
+use std::collections::HashMap;
 
 pub fn score_best(req: &ScoreRequest) -> ScoreResult {
     // concealed tiles (hand + win)
@@ -69,7 +70,10 @@ pub fn score_best(req: &ScoreRequest) -> ScoreResult {
     let mut best: Option<ScoreResult> = None;
 
     // A: special hands
-    if let Some(sp) = detect_special(&tiles14, win_tile, has_any_melds) {
+    let sp_opt = detect_special(&tiles14, win_tile, has_any_melds)
+        .or_else(|| detect_special_fallback(&tiles14, win_tile, has_any_melds));
+
+    if let Some(sp) = sp_opt {
         let yr = eval_special_yaku(sp);
 
         let aka = count_aka(&all_tiles);
@@ -144,6 +148,12 @@ pub fn score_best(req: &ScoreRequest) -> ScoreResult {
 
     // 切り分け用：分解不能と役なしを区別
     if patterns.is_empty() {
+        // ✅ 七対子/国士など special で best が埋まっているなら、それを返す
+        if let Some(b) = best {
+            return b;
+        }
+
+        // ✅ special でも拾えず、標準形でも分解できない場合だけエラー
         return ScoreResult {
             total_points: 0,
             yakuman: 0,
@@ -313,6 +323,65 @@ fn melds_to_blocks(req: &ScoreRequest) -> Vec<Block> {
     }
 
     v
+}
+
+fn detect_special_fallback(
+    tiles14: &[Tile],
+    win_tile: Tile,
+    has_calls: bool,
+) -> Option<SpecialHand> {
+    if has_calls {
+        return None;
+    }
+    if tiles14.len() != 14 {
+        return None;
+    }
+
+    // counts
+    let mut counts: HashMap<TileKey, u8> = HashMap::new();
+    for t in tiles14 {
+        *counts.entry(TileKey::from_tile(t)).or_insert(0) += 1;
+    }
+
+    // 七対子：7種類がすべて2枚
+    if counts.len() == 7 && counts.values().all(|&c| c == 2) {
+        return Some(SpecialHand::Chiitoitsu);
+    }
+
+    // 国士：13種（么九字牌）すべてが存在し、どれか1種が2枚、他は1枚
+    // さらに全牌が么九字牌であること
+    for t in tiles14 {
+        if !(t.suit == Suit::Honor || t.num == 1 || t.num == 9) {
+            return None; // 么九字牌以外が混ざったら国士ではない
+        }
+    }
+
+    if counts.len() != 13 {
+        return None;
+    }
+
+    let mut pair_key: Option<TileKey> = None;
+    for (k, &c) in &counts {
+        match c {
+            1 => {}
+            2 => {
+                if pair_key.is_some() {
+                    return None;
+                }
+                pair_key = Some(*k);
+            }
+            _ => return None,
+        }
+    }
+
+    let pk = pair_key?;
+    let wk = TileKey::from_tile(&win_tile);
+
+    if pk == wk {
+        Some(SpecialHand::Kokushi13)
+    } else {
+        Some(SpecialHand::Kokushi)
+    }
 }
 
 // ===== ソート用のローカルヘルパー =====

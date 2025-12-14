@@ -620,9 +620,9 @@ fn eval_yakuman_standard(
         names.push("大三元".into());
     }
 
-    // 大四喜 / 小四喜
-    if let Some(n) = suuushi(pattern) {
-        ym += 1;
+    // 大四喜（ダブル）/ 小四喜（シングル）
+    if let Some((add, n)) = suuushi(pattern) {
+        ym += add;
         names.push(n);
     }
 
@@ -680,7 +680,7 @@ fn is_daisangen(pattern: &HandPattern) -> bool {
     dragons == 3
 }
 
-fn suuushi(pattern: &HandPattern) -> Option<String> {
+fn suuushi(pattern: &HandPattern) -> Option<(u32, String)> {
     let mut wind_triplets = 0;
     let mut wind_pair = false;
 
@@ -710,8 +710,8 @@ fn suuushi(pattern: &HandPattern) -> Option<String> {
     }
 
     match (wind_triplets, wind_pair) {
-        (4, _) => Some("大四喜".into()),
-        (3, true) => Some("小四喜".into()),
+        (4, _) => Some((2, "大四喜".into())),    // ダブル役満
+        (3, true) => Some((1, "小四喜".into())), // シングル役満
         _ => None,
     }
 }

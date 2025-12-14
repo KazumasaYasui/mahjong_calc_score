@@ -644,6 +644,18 @@ fn eval_yakuman_standard(
         names.push(n);
     }
 
+    // 緑一色
+    if is_ryuuiisou(pattern) {
+        ym += 1;
+        names.push("緑一色".into());
+    }
+
+    // 九蓮宝燈 / 純正九蓮宝燈（ダブル）
+    if let Some((add, name)) = chuuren_poutou(pattern, win_tile) {
+        ym += add;
+        names.push(name);
+    }
+
     if ym == 0 {
         None
     } else {
@@ -782,5 +794,136 @@ fn suuankou(pattern: &HandPattern, win_tile: Tile, win_type: WinType) -> Option<
         Some((2, "四暗刻単騎".into()))
     } else {
         Some((1, "四暗刻".into()))
+    }
+}
+
+fn tiles_from_pattern(pattern: &HandPattern) -> Vec<Tile> {
+    let mut v = vec![];
+    for b in &pattern.blocks {
+        match b {
+            Block::Shuntsu(a, b, c) => {
+                v.push(*a);
+                v.push(*b);
+                v.push(*c);
+            }
+            Block::Koutsu(a, b, c) => {
+                v.push(*a);
+                v.push(*b);
+                v.push(*c);
+            }
+            Block::Kantsu(a, b, c, d) => {
+                v.push(*a);
+                v.push(*b);
+                v.push(*c);
+                v.push(*d);
+            }
+            Block::Toitsu(a, b) => {
+                v.push(*a);
+                v.push(*b);
+            }
+        }
+    }
+    // pair（雀頭）
+    match &pattern.pair {
+        Block::Toitsu(a, b) => {
+            v.push(*a);
+            v.push(*b);
+        }
+        _ => {}
+    }
+    v
+}
+
+fn is_ryuuiisou(pattern: &HandPattern) -> bool {
+    // 緑一色：2s,3s,4s,6s,8s と 發のみで構成
+    // （順子ありでもOK）
+    let tiles = tiles_from_pattern(pattern);
+
+    tiles.iter().all(|t| {
+        if t.suit == Suit::Honor {
+            return matches!(t.honor, Some(Honor::Green));
+        }
+        if t.suit != Suit::Sou {
+            return false;
+        }
+        matches!(t.num, 2 | 3 | 4 | 6 | 8)
+    })
+}
+
+fn chuuren_poutou(pattern: &HandPattern, win_tile: Tile) -> Option<(u32, String)> {
+    // 九蓮宝燈：同一スートのみ（字牌なし）
+    // 1112345678999 + 同一スートの任意1枚
+    // 純正九蓮宝燈（ダブル）：和了牌が9面待ち（和了前が 1112345678999 そのもの）
+    let tiles = tiles_from_pattern(pattern);
+    if tiles.len() != 14 {
+        return None;
+    }
+
+    // 字牌なし & 同一スート
+    let mut suit: Option<Suit> = None;
+    for t in &tiles {
+        if t.suit == Suit::Honor {
+            return None;
+        }
+        suit = match suit {
+            None => Some(t.suit),
+            Some(s) if s == t.suit => Some(s),
+            _ => return None,
+        };
+    }
+    let s = suit?;
+
+    // 1..9 のカウント
+    let mut c = [0u8; 10];
+    for t in &tiles {
+        if t.suit != s {
+            return None;
+        }
+        if !(1..=9).contains(&t.num) {
+            return None;
+        }
+        c[t.num as usize] += 1;
+    }
+
+    // 九蓮の必要条件（14枚側）
+    if c[1] < 3 || c[9] < 3 {
+        return None;
+    }
+    for n in 2..=8 {
+        if c[n] < 1 {
+            return None;
+        }
+    }
+    // 合計14
+    let sum: u8 = (1..=9).map(|n| c[n]).sum();
+    if sum != 14 {
+        return None;
+    }
+
+    // 純正判定：和了牌を1枚抜いたときに 1112345678999 になっているか
+    // base13: 1が3枚、9が3枚、2..8が1枚
+    let mut c2 = c;
+    c2[win_tile.num as usize] = c2[win_tile.num as usize].saturating_sub(1);
+
+    let mut ok_base = true;
+    if c2[1] != 3 || c2[9] != 3 {
+        ok_base = false;
+    }
+    for n in 2..=8 {
+        if c2[n] != 1 {
+            ok_base = false;
+        }
+    }
+    let sum13: u8 = (1..=9).map(|n| c2[n]).sum();
+    if sum13 != 13 {
+        ok_base = false;
+    }
+
+    if ok_base {
+        // 純正九蓮宝燈（ダブル役満）
+        Some((2, "純正九蓮宝燈".into()))
+    } else {
+        // 九蓮宝燈（シングル役満）
+        Some((1, "九蓮宝燈".into()))
     }
 }
